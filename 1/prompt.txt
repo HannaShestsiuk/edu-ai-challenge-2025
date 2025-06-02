@@ -1,0 +1,12 @@
+Act like a technical architecture advisor. I am selecting a database for a new application and need  help to choose the most suitable one based on the requirements listed below. 
+
+Project Requirements: 
+1. It's a social platform expected to handle millions of users. 
+2. Needs to store user profiles, user posts, and connections (relationships) between users. 
+3. Requires high read performance. 
+4. Expected 80% read operations and 20% write operations. 
+5. Should scale well as the user base grows. 
+
+At the end, suggest a specific type of database that best fit.
+
+Use Chain-of-Thought (CoT) reasoning.
