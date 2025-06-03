@@ -1,0 +1,11 @@
+Act like a Senior Software engineer. 
+
+I come across a bug where logout button doesn’t work on Safari. It just doesn’t respond.
+
+Create a bug report with the following structure:
+Title
+Description
+Steps to Reproduce
+Expected vs Actual Behavior
+Environment (if known)
+Severity or Impact
