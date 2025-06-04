@@ -1,0 +1,20 @@
+{
+  "summary": "The text discusses the rise of remote work, particularly after the pandemic, highlighting its benefits such as improved work-life balance, higher job satisfaction, and reduced operational costs for employers. It also addresses challenges like employee isolation, reduced collaboration, and productivity concerns. Despite these issues, remote work is expected to remain prevalent, with hybrid models and improved technology supporting its adoption.",
+  "sentiment": "Positive",
+  "sentiment_score": 0.6,
+  "metadata": {
+    "topic": "Remote Work Trends",
+    "tone": "Balanced, Informative",
+    "key_phrases": [
+      "remote work",
+      "telecommuting",
+      "job satisfaction",
+      "work-life balance",
+      "hybrid models",
+      "employee isolation",
+      "technology tools"
+    ],
+    "document_length_words": 213,
+    "analysis_timestamp": "2025-06-04T00:00:00Z"
+  }
+}
