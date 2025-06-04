@@ -1,0 +1,5 @@
+Analyze the text from the attached file. 
+- Perform Text Summarization and generate a concise summary of the provided text.
+- Perform Sentiment Analysis of the provided text and classify it as 'Positive', 'Neutral', or 'Negative'.
+- Provide a sentiment score using the range: '-1' for very negative, '0 'for neutral, '+1' for very positive.
+- Return the results in a structured JSON format, including all of the above and any relevant metadata you deem useful.
