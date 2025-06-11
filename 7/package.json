@@ -1,0 +1,72 @@
+{
+  "name": "sea-battle-modernized",
+  "version": "2.0.0",
+  "description": "A modernized version of the classic Sea Battle (Battleship) game with ES6+ features and clean architecture",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js",
+    "dev": "node --watch main.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:verbose": "jest --verbose"
+  },
+  "keywords": [
+    "game",
+    "battleship",
+    "sea-battle",
+    "cli",
+    "javascript",
+    "es6",
+    "terminal"
+  ],
+  "author": "Modernization Project",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/example/sea-battle-modernized.git"
+  },
+  "bugs": {
+    "url": "https://github.com/example/sea-battle-modernized/issues"
+  },
+  "homepage": "https://github.com/example/sea-battle-modernized#readme",
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "transform": {},
+    "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/**/*.test.js",
+      "!main.js"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ],
+    "testMatch": [
+      "**/__tests__/**/*.js",
+      "**/?(*.)+(spec|test).js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "jest.setup.js"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 60,
+        "functions": 60,
+        "lines": 60,
+        "statements": 60
+      }
+    }
+  }
+} 
