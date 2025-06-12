@@ -98,14 +98,17 @@ describe('SeaBattleGame', () => {
     test('should update display with current game state', () => {
       jest.spyOn(game.display, 'showBoards');
       jest.spyOn(game.display, 'showGameStatus');
-      jest.spyOn(game.player.opponentBoard, 'getGrid').mockReturnValue([]);
-      jest.spyOn(game.player.board, 'getGrid').mockReturnValue([]);
+      
+      // Create proper 10x10 grid mock data
+      const mockGrid = Array(10).fill(null).map(() => Array(10).fill('~'));
+      jest.spyOn(game.player.opponentBoard, 'getGrid').mockReturnValue(mockGrid);
+      jest.spyOn(game.player.board, 'getGrid').mockReturnValue(mockGrid);
       jest.spyOn(game.player, 'getRemainingShips').mockReturnValue(3);
       jest.spyOn(game.aiPlayer, 'getRemainingShips').mockReturnValue(2);
 
       game.updateDisplay();
 
-      expect(game.display.showBoards).toHaveBeenCalledWith([], []);
+      expect(game.display.showBoards).toHaveBeenCalledWith(mockGrid, mockGrid);
       expect(game.display.showGameStatus).toHaveBeenCalledWith(3, 2);
     });
   });
@@ -120,6 +123,8 @@ describe('SeaBattleGame', () => {
     test('should process valid player guess', async () => {
       jest.spyOn(game.display, 'showPlayerGuessResult');
       jest.spyOn(game.aiPlayer, 'hasLost').mockReturnValue(false);
+      // Mock to return miss to avoid infinite loop from hits
+      jest.spyOn(game.aiPlayer, 'receiveGuess').mockReturnValue({ hit: false, sunk: false });
 
       const result = await game.handlePlayerTurn();
 
@@ -141,22 +146,56 @@ describe('SeaBattleGame', () => {
     });
 
     test('should handle already guessed location', async () => {
-      // First guess
-      await game.handlePlayerTurn();
+      // Mock consecutive inputs: first a miss, then the same location again
+      game.promptInput = jest.fn()
+        .mockResolvedValueOnce('55') // First guess (miss)
+        .mockResolvedValueOnce('55') // Second guess (same location)
+        .mockResolvedValueOnce('56'); // Third guess (different location, miss)
       
-      // Second guess at same location
-      const result = await game.handlePlayerTurn();
+      // Mock to ensure we get misses to avoid infinite loop from hits
+      jest.spyOn(game.aiPlayer, 'receiveGuess').mockReturnValue({ hit: false, sunk: false });
 
-      expect(result).toBe(true);
+      // First guess
+      const result1 = await game.handlePlayerTurn();
+      expect(result1).toBe(true);
+      
+      // Second guess at same location should still work but show already guessed message
+      const result2 = await game.handlePlayerTurn();
+      expect(result2).toBe(true);
     });
 
     test('should detect game over when all AI ships sunk', async () => {
       jest.spyOn(game.aiPlayer, 'hasLost').mockReturnValue(true);
+      // Mock to return miss to avoid infinite loop
+      jest.spyOn(game.aiPlayer, 'receiveGuess').mockReturnValue({ hit: false, sunk: false });
 
       await game.handlePlayerTurn();
 
       expect(game.gameOver).toBe(true);
       expect(game.winner).toBe(game.player);
+    });
+
+    test('should continue player turn on hit and end on miss', async () => {
+      // Mock inputs: hit, hit, miss
+      game.promptInput = jest.fn()
+        .mockResolvedValueOnce('55') // First guess (hit)
+        .mockResolvedValueOnce('56') // Second guess (hit) 
+        .mockResolvedValueOnce('57'); // Third guess (miss)
+      
+      // Mock to return hit, then hit, then miss
+      jest.spyOn(game.aiPlayer, 'receiveGuess')
+        .mockReturnValueOnce({ hit: true, sunk: false })
+        .mockReturnValueOnce({ hit: true, sunk: false })
+        .mockReturnValueOnce({ hit: false, sunk: false });
+      
+      jest.spyOn(game.aiPlayer, 'hasLost').mockReturnValue(false);
+      jest.spyOn(game.display, 'showPlayerGuessResult');
+
+      const result = await game.handlePlayerTurn();
+
+      expect(result).toBe(true);
+      // Should have been called 3 times (2 hits + 1 miss)
+      expect(game.display.showPlayerGuessResult).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -202,23 +241,29 @@ describe('SeaBattleGame', () => {
     test('should display game over screen for player win', () => {
       game.winner = game.player;
       jest.spyOn(game.display, 'showGameOver');
-      jest.spyOn(game.player.opponentBoard, 'getGrid').mockReturnValue([]);
-      jest.spyOn(game.player.board, 'getGrid').mockReturnValue([]);
+      
+      // Create proper 10x10 grid mock data
+      const mockGrid = Array(10).fill(null).map(() => Array(10).fill('~'));
+      jest.spyOn(game.aiPlayer.board, 'getGrid').mockReturnValue(mockGrid);
+      jest.spyOn(game.player.board, 'getGrid').mockReturnValue(mockGrid);
 
       game.endGame();
 
-      expect(game.display.showGameOver).toHaveBeenCalledWith(true, [], []);
+      expect(game.display.showGameOver).toHaveBeenCalledWith(true, mockGrid, mockGrid);
     });
 
     test('should display game over screen for AI win', () => {
       game.winner = game.aiPlayer;
       jest.spyOn(game.display, 'showGameOver');
-      jest.spyOn(game.player.opponentBoard, 'getGrid').mockReturnValue([]);
-      jest.spyOn(game.player.board, 'getGrid').mockReturnValue([]);
+      
+      // Create proper 10x10 grid mock data
+      const mockGrid = Array(10).fill(null).map(() => Array(10).fill('~'));
+      jest.spyOn(game.aiPlayer.board, 'getGrid').mockReturnValue(mockGrid);
+      jest.spyOn(game.player.board, 'getGrid').mockReturnValue(mockGrid);
 
       game.endGame();
 
-      expect(game.display.showGameOver).toHaveBeenCalledWith(false, [], []);
+      expect(game.display.showGameOver).toHaveBeenCalledWith(false, mockGrid, mockGrid);
     });
   });
 
@@ -357,4 +402,4 @@ describe('SeaBattleGame', () => {
       await expect(game.initializePlayers()).rejects.toThrow('Failed to place ships');
     });
   });
-}); 
+});
