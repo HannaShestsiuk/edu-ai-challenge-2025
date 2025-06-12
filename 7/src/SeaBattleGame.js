@@ -107,19 +107,37 @@ export class SeaBattleGame {
           continue;
         }
         
-        // Process the guess
+        // Process the guess on AI player's actual board
         const result = this.aiPlayer.receiveGuess(coordinate);
-        this.player.opponentBoard.processGuess(coordinate);
+        
+        // Update the player's tracking board based on the result
+        if (result.hit) {
+          this.player.opponentBoard.markHit(coordinate);
+        } else {
+          this.player.opponentBoard.markMiss(coordinate);
+        }
         
         this.display.showPlayerGuessResult(coordinate, result);
+        
+        // Update display to show the hit/miss on the board
+        this.updateDisplay();
         
         // Check for game over
         if (this.aiPlayer.hasLost()) {
           this.gameOver = true;
           this.winner = this.player;
+          return true;
         }
         
-        return true;
+        // If player hit a ship, they continue their turn
+        if (result.hit) {
+          console.log('🎯 Great hit! You get another turn!');
+          // Continue the loop to let player guess again
+          continue;
+        } else {
+          // Player missed, turn ends
+          return true;
+        }
         
       } catch (error) {
         console.error('Error during player turn:', error.message);
@@ -154,6 +172,7 @@ export class SeaBattleGame {
    * Update and display current game state
    */
   updateDisplay() {
+    // Show the tracking board (only hits/misses visible) for opponent
     const opponentGrid = this.player.opponentBoard.getGrid();
     const playerGrid = this.player.board.getGrid();
     
@@ -169,7 +188,8 @@ export class SeaBattleGame {
    */
   endGame() {
     const playerWon = this.winner === this.player;
-    const opponentGrid = this.player.opponentBoard.getGrid();
+    // Show the actual AI player's board (with all ships revealed) in final display
+    const opponentGrid = this.aiPlayer.board.getGrid();
     const playerGrid = this.player.board.getGrid();
     
     this.display.showGameOver(playerWon, opponentGrid, playerGrid);
