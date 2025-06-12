@@ -14,8 +14,10 @@ export class GameDisplay {
     console.log('\n🚢 Welcome to Sea Battle! 🚢');
     console.log('=====================================');
     console.log(`Try to sink the ${numShips} enemy ships.`);
+    console.log('Enemy ships are hidden until you hit them!');
+    console.log('🎯 Hit a ship? You get another turn!');
     console.log('\nSymbols:');
-    console.log('  ~ = Water (unknown)');
+    console.log('  ~ = Water (unexplored)');
     console.log('  S = Your ships');
     console.log('  X = Hit');
     console.log('  O = Miss');
@@ -190,4 +192,4 @@ export class GameDisplay {
   showSeparator() {
     console.log('-'.repeat(70));
   }
-} 
+}
