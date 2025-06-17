@@ -139,8 +139,8 @@ class BaseValidator {
     /** @type {string|null} Custom error message */
     this.customMessage = null;
     
-    /** @type {Function|null} Transformation function */
-    this.transformFn = null;
+    /** @type {Function[]} Array of transformation functions */
+    this.transformFns = [];
   }
 
   /**
@@ -183,7 +183,8 @@ class BaseValidator {
    * validator.validate("  HELLO  "); // { isValid: true, value: "hello" }
    */
   transform(fn) {
-    this.transformFn = fn;
+    this.transformFns = this.transformFns || [];
+    this.transformFns.push(fn);
     return this;
   }
 
@@ -198,25 +199,32 @@ class BaseValidator {
    * const result = validator.validate("test@example.com", "user.email");
    */
   validate(value, path = '') {
-    // Handle null/undefined values for optional fields
-    if (value === undefined || value === null) {
-      if (this.isOptionalField) {
-        return ValidationResult.success(value);
-      }
+    // Handle optional fields
+    if (this.isOptionalField && (value === null || value === undefined)) {
+      return ValidationResult.success(value);
+    }
+
+    // Handle required fields
+    if (!this.isOptionalField && (value === null || value === undefined)) {
       return ValidationResult.failure(this._formatError('Field is required', path));
     }
 
-    // Perform type-specific validation
+    // Run validation
     const result = this._validate(value, path);
-    
-    // Apply transformation if validation passed and transform function exists
-    if (result.isValid && this.transformFn) {
+    if (!result.isValid) {
+      return result;
+    }
+
+    // Apply all transformations in order if validation succeeded
+    if (this.transformFns && this.transformFns.length > 0) {
       try {
-        result.value = this.transformFn(result.value);
+        let transformedValue = result.value;
+        for (const fn of this.transformFns) {
+          transformedValue = fn(transformedValue);
+        }
+        result.value = transformedValue;
       } catch (error) {
-        return ValidationResult.failure(
-          this._formatError(`Transformation failed: ${error.message}`, path)
-        );
+        return ValidationResult.failure(this._formatError(`Transformation failed: ${error.message}`, path));
       }
     }
 
@@ -250,8 +258,11 @@ class BaseValidator {
    * // Returns: "Must be a string at user.name" or custom message
    */
   _formatError(message, path) {
-    const location = path ? ` at ${path}` : '';
-    return this.customMessage || `${message}${location}`;
+    const errorMessage = this.customMessage || message;
+    if (!path) {
+      return errorMessage;
+    }
+    return `${errorMessage} at ${path}`;
   }
 }
 
@@ -355,8 +366,9 @@ class StringValidator extends BaseValidator {
    * Schema.string().email().validate('invalid-email'); // Invalid
    */
   email() {
-    this.patternRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return this.withMessage('Must be a valid email address');
+    this.pattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
+    this.customMessage = 'Must be a valid email address';
+    return this;
   }
 
   /**
@@ -368,8 +380,9 @@ class StringValidator extends BaseValidator {
    * Schema.string().url().validate('not-a-url'); // Invalid
    */
   url() {
-    this.patternRegex = /^https?:\/\/.+/;
-    return this.withMessage('Must be a valid URL');
+    this.pattern(/^https?:\/\/[^\s$.?#].[^\s]*$/);
+    this.customMessage = 'Must be a valid URL';
+    return this;
   }
 
   /**
@@ -381,18 +394,17 @@ class StringValidator extends BaseValidator {
    * @protected
    */
   _validate(value, path) {
+    const errors = [];
+
     // Type check
     if (typeof value !== 'string') {
       return ValidationResult.failure(this._formatError('Must be a string', path));
     }
 
-    const errors = [];
-
     // Length validations
     if (this.minLen !== null && value.length < this.minLen) {
       errors.push(this._formatError(`Must be at least ${this.minLen} characters long`, path));
     }
-
     if (this.maxLen !== null && value.length > this.maxLen) {
       errors.push(this._formatError(`Must be at most ${this.maxLen} characters long`, path));
     }
@@ -909,7 +921,10 @@ class ObjectValidator extends BaseValidator {
    */
   _validate(value, path) {
     // Type check
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    if (value === null || value === undefined) {
+      return ValidationResult.failure(this._formatError('Must be an object', path));
+    }
+    if (typeof value !== 'object' || Array.isArray(value)) {
       return ValidationResult.failure(this._formatError('Must be an object', path));
     }
 
