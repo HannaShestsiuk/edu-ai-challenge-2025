@@ -1,0 +1,11 @@
+{
+  "word_count": 823,
+  "speaking_speed_wpm": 130,
+  "frequently_mentioned_topics": [
+    { "topic": "pain", "mentions": 18 },
+    { "topic": "heart attack", "mentions": 7 },
+    { "topic": "chest", "mentions": 6 },
+    { "topic": "symptoms", "mentions": 6 },
+    { "topic": "Tylenol", "mentions": 3 }
+  ]
+}
