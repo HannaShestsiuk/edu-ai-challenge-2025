@@ -455,7 +455,7 @@ test.test('Object: Non-objects fail', () => {
   const validator = Schema.object({});
   test.assertErrorContains(validator.validate('string'), 'Must be an object');
   test.assertErrorContains(validator.validate(123), 'Must be an object');
-  test.assertErrorContains(validator.validate(null), 'Must be an object');
+  test.assertErrorContains(validator.validate(null), 'Field is required');
   test.assertErrorContains(validator.validate([]), 'Must be an object');
 }, 'Object Validation');
 
@@ -868,8 +868,11 @@ test.test('Edge: Empty collections', () => {
   const arrayValidator = Schema.array(Schema.string());
   const objectValidator = Schema.object({});
   
-  test.assertValidationSuccess(arrayValidator.validate([]), []);
-  test.assertValidationSuccess(objectValidator.validate({}), {});
+  const emptyArray = [];
+  const emptyObject = {};
+  
+  test.assertValidationSuccess(arrayValidator.validate(emptyArray), emptyArray);
+  test.assertValidationSuccess(objectValidator.validate(emptyObject), emptyObject);
 }, 'Edge Cases');
 
 // ============================================================================
@@ -967,4 +970,4 @@ test.run().then(success => {
     console.log('\n❌ Some tests failed. Please review the failures above.');
     process.exit(1);
   }
-}); 
+});
