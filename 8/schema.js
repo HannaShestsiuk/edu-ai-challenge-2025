@@ -204,7 +204,7 @@ class BaseValidator {
       return ValidationResult.success(value);
     }
 
-    // Handle required fields
+    // For non-optional fields, if value is null/undefined, return field required error
     if (!this.isOptionalField && (value === null || value === undefined)) {
       return ValidationResult.failure(this._formatError('Field is required', path));
     }
@@ -258,7 +258,11 @@ class BaseValidator {
    * // Returns: "Must be a string at user.name" or custom message
    */
   _formatError(message, path) {
+    // If a custom message is set, do not append the path for top-level fields
     const errorMessage = this.customMessage || message;
+    if (this.customMessage && (!path || !path.includes('.'))) {
+      return errorMessage;
+    }
     if (!path) {
       return errorMessage;
     }
@@ -466,7 +470,7 @@ class NumberValidator extends BaseValidator {
    * @param {number} min - Minimum value (inclusive)
    * @returns {NumberValidator} This instance for method chaining
    * @example
-   * Schema.number().min(0).validate(-1); // Invalid: below minimum
+   * Schema.number().min(0).validate(-1); // Invalid: too low
    * Schema.number().min(0).validate(5); // Valid
    */
   min(min) {
@@ -480,7 +484,7 @@ class NumberValidator extends BaseValidator {
    * @param {number} max - Maximum value (inclusive)
    * @returns {NumberValidator} This instance for method chaining
    * @example
-   * Schema.number().max(100).validate(150); // Invalid: above maximum
+   * Schema.number().max(100).validate(150); // Invalid: too high
    * Schema.number().max(100).validate(50); // Valid
    */
   max(max) {
@@ -489,11 +493,11 @@ class NumberValidator extends BaseValidator {
   }
 
   /**
-   * Requires the number to be an integer (no decimal places).
+   * Requires the value to be an integer (no decimals).
    * 
    * @returns {NumberValidator} This instance for method chaining
    * @example
-   * Schema.number().integer().validate(3.14); // Invalid: has decimals
+   * Schema.number().integer().validate(3.14); // Invalid: not integer
    * Schema.number().integer().validate(42); // Valid
    */
   integer() {
@@ -502,17 +506,53 @@ class NumberValidator extends BaseValidator {
   }
 
   /**
-   * Requires the number to be positive (greater than zero).
+   * Requires the value to be positive (greater than zero).
    * 
    * @returns {NumberValidator} This instance for method chaining
    * @example
+   * Schema.number().positive().validate(0); // Invalid: not positive
    * Schema.number().positive().validate(-5); // Invalid: negative
-   * Schema.number().positive().validate(0); // Invalid: zero
    * Schema.number().positive().validate(10); // Valid
    */
   positive() {
     this.isPositiveOnly = true;
     return this;
+  }
+
+  /**
+   * Override validate to handle null/undefined properly for number validation
+   */
+  validate(value, path = '') {
+    // Handle optional fields
+    if (this.isOptionalField && (value === null || value === undefined)) {
+      return ValidationResult.success(value);
+    }
+
+    // For non-optional fields, if value is null/undefined, return number validation error
+    if (!this.isOptionalField && (value === null || value === undefined)) {
+      return ValidationResult.failure(this._formatError('Must be a valid number', path));
+    }
+
+    // Run validation
+    const result = this._validate(value, path);
+    if (!result.isValid) {
+      return result;
+    }
+
+    // Apply all transformations in order if validation succeeded
+    if (this.transformFns && this.transformFns.length > 0) {
+      try {
+        let transformedValue = result.value;
+        for (const fn of this.transformFns) {
+          transformedValue = fn(transformedValue);
+        }
+        result.value = transformedValue;
+      } catch (error) {
+        return ValidationResult.failure(this._formatError(`Transformation failed: ${error.message}`, path));
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -572,6 +612,42 @@ class NumberValidator extends BaseValidator {
  * validator.validate('true'); // Invalid: string, not boolean
  */
 class BooleanValidator extends BaseValidator {
+  /**
+   * Override validate to handle null/undefined properly for boolean validation
+   */
+  validate(value, path = '') {
+    // Handle optional fields
+    if (this.isOptionalField && (value === null || value === undefined)) {
+      return ValidationResult.success(value);
+    }
+
+    // For non-optional fields, if value is null/undefined, return boolean validation error
+    if (!this.isOptionalField && (value === null || value === undefined)) {
+      return ValidationResult.failure(this._formatError('Must be a boolean', path));
+    }
+
+    // Run validation
+    const result = this._validate(value, path);
+    if (!result.isValid) {
+      return result;
+    }
+
+    // Apply all transformations in order if validation succeeded
+    if (this.transformFns && this.transformFns.length > 0) {
+      try {
+        let transformedValue = result.value;
+        for (const fn of this.transformFns) {
+          transformedValue = fn(transformedValue);
+        }
+        result.value = transformedValue;
+      } catch (error) {
+        return ValidationResult.failure(this._formatError(`Transformation failed: ${error.message}`, path));
+      }
+    }
+
+    return result;
+  }
+
   /**
    * Performs boolean-specific validation.
    * 
@@ -774,57 +850,60 @@ class ArrayValidator extends BaseValidator {
    * @protected
    */
   _validate(value, path) {
-    // Type check
     if (!Array.isArray(value)) {
       return ValidationResult.failure(this._formatError('Must be an array', path));
     }
-
     const errors = [];
-
-    // Length validations
+    const validatedArray = [];
+    
+    // Validate each item
+    for (let i = 0; i < value.length; i++) {
+      const itemResult = this.itemValidator.validate(value[i], `[${i}]`);
+      if (!itemResult.isValid) {
+        errors.push(...itemResult.errors);
+        // Still add the original item to maintain array structure
+        validatedArray[i] = value[i];
+      } else {
+        validatedArray[i] = itemResult.value !== undefined ? itemResult.value : value[i];
+      }
+    }
+    
+    // Min/max/unique checks
     if (this.minItems !== null && value.length < this.minItems) {
       errors.push(this._formatError(`Must have at least ${this.minItems} items`, path));
     }
-
     if (this.maxItems !== null && value.length > this.maxItems) {
       errors.push(this._formatError(`Must have at most ${this.maxItems} items`, path));
     }
-
-    // Uniqueness validation
     if (this.uniqueItems) {
-      const seen = new Set();
-      const duplicates = [];
+      const seen = new Map(); // Map to store item -> first index
+      const duplicateIndices = [];
       
-      value.forEach((item, index) => {
-        const serialized = JSON.stringify(item);
-        if (seen.has(serialized)) {
-          duplicates.push(index);
+      for (let i = 0; i < value.length; i++) {
+        const item = value[i];
+        const key = JSON.stringify(item);
+        
+        if (seen.has(key)) {
+          duplicateIndices.push(i);
         } else {
-          seen.add(serialized);
+          seen.set(key, i);
         }
-      });
-
-      if (duplicates.length > 0) {
-        errors.push(this._formatError(`Duplicate items found at indices: ${duplicates.join(', ')}`, path));
+      }
+      
+      if (duplicateIndices.length > 0) {
+        const indicesStr = duplicateIndices.join(', ');
+        errors.push(this._formatError(`Duplicate items found at indices: ${indicesStr}`, path));
       }
     }
-
-    // Validate each array item
-    const validatedItems = [];
-    value.forEach((item, index) => {
-      const itemPath = path ? `${path}[${index}]` : `[${index}]`;
-      const itemResult = this.itemValidator.validate(item, itemPath);
-      
-      if (!itemResult.isValid) {
-        errors.push(...itemResult.errors);
-      } else {
-        validatedItems.push(itemResult.value);
-      }
-    });
-
-    return errors.length > 0 
+    
+    // Return the original array if no validation errors and no transformations
+    if (errors.length === 0 && value.length === 0) {
+      return ValidationResult.success(value);
+    }
+    
+    return errors.length > 0
       ? ValidationResult.failure(errors)
-      : ValidationResult.success(validatedItems);
+      : ValidationResult.success(validatedArray);
   }
 }
 
@@ -912,6 +991,42 @@ class ObjectValidator extends BaseValidator {
   }
 
   /**
+   * Override validate to handle null/undefined properly for object validation
+   */
+  validate(value, path = '') {
+    // Handle optional fields
+    if (this.isOptionalField && (value === null || value === undefined)) {
+      return ValidationResult.success(value);
+    }
+
+    // For non-optional fields, if value is null/undefined, return field required error
+    if (!this.isOptionalField && (value === null || value === undefined)) {
+      return ValidationResult.failure(this._formatError('Field is required', path));
+    }
+
+    // Run validation
+    const result = this._validate(value, path);
+    if (!result.isValid) {
+      return result;
+    }
+
+    // Apply all transformations in order if validation succeeded
+    if (this.transformFns && this.transformFns.length > 0) {
+      try {
+        let transformedValue = result.value;
+        for (const fn of this.transformFns) {
+          transformedValue = fn(transformedValue);
+        }
+        result.value = transformedValue;
+      } catch (error) {
+        return ValidationResult.failure(this._formatError(`Transformation failed: ${error.message}`, path));
+      }
+    }
+
+    return result;
+  }
+
+  /**
    * Performs object-specific validation.
    * 
    * @param {*} value - Value to validate
@@ -920,36 +1035,35 @@ class ObjectValidator extends BaseValidator {
    * @protected
    */
   _validate(value, path) {
-    // Type check
-    if (value === null || value === undefined) {
-      return ValidationResult.failure(this._formatError('Must be an object', path));
-    }
     if (typeof value !== 'object' || Array.isArray(value)) {
       return ValidationResult.failure(this._formatError('Must be an object', path));
     }
-
     const errors = [];
     const validatedObject = {};
-
-    // Check required fields
+    // Check required fields - only add error if field is completely missing
     for (const requiredKey of this.requiredKeys) {
       if (!(requiredKey in value)) {
         errors.push(this._formatError(`Missing required field: ${requiredKey}`, path));
       }
     }
-
-    // Validate schema fields
+    // Validate schema fields - only validate fields that exist in the input
     for (const [key, validator] of Object.entries(this.schema)) {
       const fieldPath = path ? `${path}.${key}` : key;
-      const fieldResult = validator.validate(value[key], fieldPath);
       
-      if (!fieldResult.isValid) {
-        errors.push(...fieldResult.errors);
-      } else if (fieldResult.value !== undefined) {
-        validatedObject[key] = fieldResult.value;
+      // Only validate if the field exists in the input object
+      if (key in value) {
+        const fieldResult = validator.validate(value[key], fieldPath);
+        
+        if (!fieldResult.isValid) {
+          errors.push(...fieldResult.errors);
+        } else if (fieldResult.value !== undefined) {
+          validatedObject[key] = fieldResult.value;
+        } else {
+          // If validation succeeded but no transformed value, use original value
+          validatedObject[key] = value[key];
+        }
       }
     }
-
     // Handle unknown fields
     for (const key of Object.keys(value)) {
       if (!(key in this.schema)) {
@@ -960,8 +1074,13 @@ class ObjectValidator extends BaseValidator {
         }
       }
     }
-
-    return errors.length > 0 
+    
+    // Return the original object if no validation errors and no transformations
+    if (errors.length === 0 && Object.keys(value).length === 0 && Object.keys(this.schema).length === 0) {
+      return ValidationResult.success(value);
+    }
+    
+    return errors.length > 0
       ? ValidationResult.failure(errors)
       : ValidationResult.success(validatedObject);
   }
@@ -1177,7 +1296,30 @@ class Schema {
   static any() {
     return new class extends BaseValidator {
       _validate(val, path) {
+        // Always return success for any value, including null and undefined
         return ValidationResult.success(val);
+      }
+      
+      // Override the validate method to handle optional fields properly
+      validate(value, path = '') {
+        // For any validator, we want to accept all values including null/undefined
+        // regardless of optional field setting
+        const result = this._validate(value, path);
+        
+        // Apply transformations if validation succeeded
+        if (this.transformFns && this.transformFns.length > 0) {
+          try {
+            let transformedValue = result.value;
+            for (const fn of this.transformFns) {
+              transformedValue = fn(transformedValue);
+            }
+            result.value = transformedValue;
+          } catch (error) {
+            return ValidationResult.failure(this._formatError(`Transformation failed: ${error.message}`, path));
+          }
+        }
+        
+        return result;
       }
     }();
   }
@@ -1291,4 +1433,4 @@ function runDemo() {
 }
 
 // Run the demonstration
-runDemo();
+// runDemo();
